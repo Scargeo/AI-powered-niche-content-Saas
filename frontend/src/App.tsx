@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { UploadForm } from './components/UploadForm';
 import { ProcessingStatus } from './components/ProcessingStatus';
 import { ResultsView } from './components/ResultsView';
@@ -7,30 +6,17 @@ import { api } from './services/api';
 import type { ContentJob } from './types';
 import { Sparkles, Zap, Share2, Mail, Video, Film } from 'lucide-react';
 
-const queryClient = new QueryClient();
-
 function ContentRepurposer() {
-  const [jobId, setJobId] = useState<string | null>(null);
+  const [job, setJob] = useState<ContentJob | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-
-  const { data: job } = useQuery<ContentJob>({
-    queryKey: ['job', jobId],
-    queryFn: () => api.getJob(jobId!),
-    enabled: !!jobId,
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      if (!status || status === 'completed' || status === 'failed') return false;
-      return 2000;
-    }
-  });
 
   const handleSubmitUrl = useCallback(async (url: string, opts: { niche?: string; tone?: string; targetAudience?: string }) => {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      const { jobId: id } = await api.submitUrl(url, opts);
-      setJobId(id);
+      const completedJob = await api.submitUrl(url, opts);
+      setJob(completedJob);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } }; message?: string };
       setSubmitError(error.response?.data?.error || error.message || 'Failed to submit URL');
@@ -43,8 +29,8 @@ function ContentRepurposer() {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      const { jobId: id } = await api.submitFile(file, opts);
-      setJobId(id);
+      const completedJob = await api.submitFile(file, opts);
+      setJob(completedJob);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } }; message?: string };
       setSubmitError(error.response?.data?.error || error.message || 'Failed to submit file');
@@ -54,13 +40,12 @@ function ContentRepurposer() {
   }, []);
 
   const handleReset = useCallback(() => {
-    setJobId(null);
+    setJob(null);
     setSubmitError(null);
-    queryClient.removeQueries({ queryKey: ['job'] });
   }, []);
 
   const showResults = job?.status === 'completed' && job.outputs;
-  const showProcessing = jobId && job && !showResults;
+  const showProcessing = isSubmitting;
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -124,9 +109,17 @@ function ContentRepurposer() {
                 ))}
               </div>
 
-              {submitError && (
+              {(submitError || job?.status === 'failed') && (
                 <div className="max-w-2xl mx-auto mb-6 p-4 bg-red-900/20 border border-red-800 rounded-xl text-red-300 text-sm">
-                  ⚠️ {submitError}
+                  ⚠️ {submitError || job?.error || 'Processing failed'}
+                  {job?.status === 'failed' && (
+                    <button
+                      onClick={handleReset}
+                      className="ml-3 underline text-red-200 hover:text-white"
+                    >
+                      Try again
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -140,9 +133,9 @@ function ContentRepurposer() {
 
           {showProcessing && (
             <ProcessingStatus
-              status={job.status}
-              sourceInfo={job.sourceInfo}
-              error={job.error}
+              status="extracting"
+              sourceInfo="Processing your content…"
+              error={undefined}
             />
           )}
 
@@ -156,9 +149,5 @@ function ContentRepurposer() {
 }
 
 export default function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <ContentRepurposer />
-    </QueryClientProvider>
-  );
+  return <ContentRepurposer />;
 }

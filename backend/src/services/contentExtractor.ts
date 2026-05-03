@@ -50,25 +50,22 @@ export class ContentExtractor {
     }
   }
 
-  async extractFromFile(filePath: string, mimeType: string, originalName: string): Promise<string> {
-    const fs = await import('fs');
-    const fileBuffer = fs.readFileSync(filePath);
-    
+  async extractFromFile(buffer: Buffer, mimeType: string, originalName: string): Promise<string> {
     if (mimeType === 'application/pdf' || originalName.endsWith('.pdf')) {
-      const data = await pdf(fileBuffer);
+      const data = await pdf(buffer);
       return data.text.substring(0, 50000);
     }
-    
+
     if (
       mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
       originalName.endsWith('.docx')
     ) {
-      const result = await mammoth.extractRawText({ buffer: fileBuffer });
+      const result = await mammoth.extractRawText({ buffer });
       return result.value.substring(0, 50000);
     }
-    
+
     // Plain text, markdown, etc.
-    const text = fileBuffer.toString('utf-8');
+    const text = buffer.toString('utf-8');
     return text.substring(0, 50000);
   }
 }

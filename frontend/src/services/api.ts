@@ -1,13 +1,13 @@
 import axios from 'axios';
 import type { ContentJob } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 export const api = {
   async submitUrl(
     url: string,
     options?: { niche?: string; tone?: string; targetAudience?: string }
-  ): Promise<{ jobId: string }> {
+  ): Promise<ContentJob> {
     const { data } = await axios.post(`${API_BASE}/url`, { url, ...options });
     return data;
   },
@@ -15,7 +15,7 @@ export const api = {
   async submitFile(
     file: File,
     options?: { niche?: string; tone?: string; targetAudience?: string }
-  ): Promise<{ jobId: string }> {
+  ): Promise<ContentJob> {
     const formData = new FormData();
     formData.append('file', file);
     if (options?.niche) formData.append('niche', options.niche);

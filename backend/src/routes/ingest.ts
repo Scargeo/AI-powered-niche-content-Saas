@@ -16,8 +16,8 @@ const transformer = new ContentTransformer();
 const jobs = new Map<string, ContentJob>();
 
 const upload = multer({
-  dest: 'uploads/',
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 4.5 * 1024 * 1024 }, // 4.5 MB (Vercel request body limit)
   fileFilter: (_req, file, cb) => {
     const allowed = ['.pdf', '.docx', '.txt', '.md'];
     const ext = path.extname(file.originalname).toLowerCase();
@@ -58,9 +58,9 @@ router.post('/url', async (req: Request, res: Response) => {
   jobs.set(jobId, job);
 
   // Process asynchronously
-  processContent(job, { text: null, fromUrl: url }, { niche, tone, targetAudience }, jobs);
+  await processContent(job, { text: null, fromUrl: url }, { niche, tone, targetAudience }, jobs);
 
-  return res.status(202).json({ jobId, status: 'pending' });
+  return res.json(jobs.get(jobId));
 });
 
 // Process file
@@ -81,20 +81,20 @@ router.post('/file', upload.single('file'), async (req: Request, res: Response) 
   };
   jobs.set(jobId, job);
 
-  // Process asynchronously
-  processContent(
+  // Process synchronously so the response contains the completed job
+  await processContent(
     job,
-    { text: null, fromFile: { path: req.file.path, mimeType: req.file.mimetype, originalName: req.file.originalname } },
+    { text: null, fromFile: { buffer: req.file.buffer, mimeType: req.file.mimetype, originalName: req.file.originalname } },
     { niche, tone, targetAudience },
     jobs
   );
 
-  return res.status(202).json({ jobId, status: 'pending' });
+  return res.json(jobs.get(jobId));
 });
 
 async function processContent(
   job: ContentJob,
-  source: { text: string | null; fromUrl?: string; fromFile?: { path: string; mimeType: string; originalName: string } },
+  source: { text: string | null; fromUrl?: string; fromFile?: { buffer: Buffer; mimeType: string; originalName: string } },
   options: { niche?: string; tone?: string; targetAudience?: string },
   jobStore: Map<string, ContentJob>
 ): Promise<void> {
@@ -112,7 +112,7 @@ async function processContent(
     if (source.fromUrl) {
       text = await extractor.extractFromUrl(source.fromUrl);
     } else if (source.fromFile) {
-      text = await extractor.extractFromFile(source.fromFile.path, source.fromFile.mimeType, source.fromFile.originalName);
+      text = await extractor.extractFromFile(source.fromFile.buffer, source.fromFile.mimeType, source.fromFile.originalName);
     } else {
       text = source.text!;
     }
